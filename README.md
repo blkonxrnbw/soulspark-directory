@@ -1,1 +1,1 @@
-# soulspark-director
+# soulspark-directory
