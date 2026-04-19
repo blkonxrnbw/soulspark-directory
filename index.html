@@ -168,20 +168,43 @@ let allPeople = [];
 let activeFilter = '';
 
 // ── LOAD ──
-async function loadDirectory() {
-  try {
-    const res  = await fetch(ENDPOINT + '?action=getDirectory');
-    const data = await res.json();
-    if (data.status === 'ok') {
+function loadDirectory() {
+  // Uses JSONP (script tag) to bypass CORS — required for Google Apps Script
+  const cbName = 'ss_dir_cb_' + Date.now();
+  const tag = document.createElement('script');
+  tag.src = ENDPOINT + '?action=getDirectory&callback=' + cbName;
+
+  const timer = setTimeout(function() {
+    cleanup();
+    showError('Connection timed out. Make sure the Apps Script is deployed. See the setup guide.');
+  }, 12000);
+
+  window[cbName] = function(data) {
+    cleanup();
+    if (data && data.status === 'ok') {
       allPeople = data.people || [];
       buildFilterPills();
       filterPeople();
+      document.getElementById('statusMsg').style.display = 'none';
     } else {
-      showError('Could not load directory. ' + (data.message||''));
+      showError('Could not load directory: ' + ((data && data.message) || 'Unknown error'));
     }
-  } catch(err) {
-    showError('Could not connect to the directory. Please try again later.');
+  };
+
+  tag.onerror = function() {
+    cleanup();
+    showError('Could not connect. Check that the Apps Script is deployed with access set to Anyone.');
+  };
+
+  function cleanup() {
+    clearTimeout(timer);
+    delete window[cbName];
+    if (tag.parentNode) tag.parentNode.removeChild(tag);
   }
+
+  // Show loading state
+  document.getElementById('statusMsg').innerHTML = '<div class="icon">🔄</div><h3>Loading directory…</h3><p>Connecting to spreadsheet</p>';
+  document.head.appendChild(tag);
 }
 
 function showError(msg) {
@@ -377,6 +400,8 @@ function esc(str) {
 }
 
 // ── START ──
+// Try local CRM data first (instant), then live sync from sheet
+loadFromLocalStorage();
 loadDirectory();
 </script>
 </body>
